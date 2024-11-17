@@ -2,20 +2,30 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, s
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_migrate import Migrate
 import datetime
+import matplotlib
 import matplotlib.pyplot as plt
 import io
 import base64
 import random
 import numpy as np
+import os
 
+# Configure Matplotlib backend
+matplotlib.use('Agg')
+
+# Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///data.db')
+
+# Initialize extensions
 db = SQLAlchemy(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+migrate = Migrate(app, db)
 
 # Database models
 class User(UserMixin, db.Model):
@@ -35,6 +45,10 @@ class Simulation(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+@app.route("/")
+def home():
+    return render_template("index.html")
+
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -52,7 +66,7 @@ def login():
         user = User.query.filter_by(username=request.form['username']).first()
         if user and bcrypt.check_password_hash(user.password, request.form['password']):
             login_user(user)
-            return redirect(url_for('index'))
+            return redirect(url_for('home'))
     return render_template('login.html')
 
 @app.route('/logout')
@@ -110,5 +124,4 @@ def history():
     return render_template('history.html', simulations=simulations)
 
 if __name__ == '__main__':
-    db.create_all()
-    app.run(debug=True)
+    app.run(debug=os.getenv('FLASK_DEBUG', 'False').lower() == 'true')
