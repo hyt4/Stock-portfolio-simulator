@@ -15,6 +15,9 @@ import os
 # Configure Matplotlib backend
 matplotlib.use('Agg')
 
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///data.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
