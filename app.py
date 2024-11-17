@@ -1,91 +1,114 @@
-from flask import Flask, render_template, request, jsonify
-import numpy as np
-import pandas as pd
-import yfinance as yf
-from pandas.tseries.offsets import BDay
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_bcrypt import Bcrypt
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+import datetime
 import matplotlib.pyplot as plt
 import io
 import base64
+import random
+import numpy as np
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your_secret_key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///data.db'
+db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
 
-# Function to get stock data and simulate Monte Carlo projections
-def monte_carlo_simulation(stock, years, n_mc=10000):
-    
-    ticker = yf.Ticker(stock)
-    actual_hist = ticker.history(start="2020-12-29", end="2024-09-20", auto_adjust=False)
-    
-    
-    if actual_hist.empty:
-        return None
-    
-    # Calculate log returns and volatility
-    actual_hist['Log Returns'] = np.log(actual_hist['Close'] / actual_hist['Close'].shift(1))
-    actual_hist.dropna(inplace=True)
-    daily_volatility = actual_hist['Log Returns'].std()
-    annual_volatility = daily_volatility * np.sqrt(252)
-    sigma = annual_volatility
-    mu = .008  # Drift (adjustable)
+# Database models
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), nullable=False, unique=True)
+    password = db.Column(db.String(150), nullable=False)
 
-    # Time step
-    future_days = years * 252
-    n_t = len(actual_hist)
-    dt = 2. / (n_t + future_days - 1)
-    
-    
-    last_date = actual_hist.index[-1]
-    future_dates = pd.date_range(last_date, periods=future_days + 1, freq=BDay())[1:]
-    all_dates = actual_hist.index.append(future_dates)
+class Simulation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ticker = db.Column(db.String(10), nullable=False)
+    years = db.Column(db.Integer, nullable=False)
+    result_data = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
-    # Initialize Monte Carlo simulation
-    St = pd.DataFrame(np.zeros((n_t + future_days, n_mc)), index=all_dates)
-    St.iloc[0] = actual_hist['Close'].iloc[0]
-    
-    # Perform the simulation
-    for i in range(1, n_t + future_days):
-        dS_2_S = mu * dt + sigma * np.sqrt(dt) * np.random.randn(n_mc)
-        St.iloc[i] = St.iloc[i-1] + St.iloc[i-1] * dS_2_S
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
-    # Get mean and median
-    St_mc_mean = St.mean(axis=1)
-    St_mc_median = St.median(axis=1)
-    
-    # Plot results to a PNG
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(actual_hist.index, actual_hist['Close'], 'r', lw=1, label="Actual Price")
-    for i in np.random.choice(np.array(range(1, n_mc+1)), size=20):
-        ax.plot(St.index, St[i], 'b', lw=.5)
-    ax.plot(St_mc_mean.index, St_mc_mean, 'g', lw=2, label="Monte Carlo Mean")
-    ax.plot(St_mc_median.index, St_mc_median, 'orange', lw=2, label="Monte Carlo Median")
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Stock Price')
-    ax.set_title(f'Monte Carlo Simulation for {stock}: {years} Years into the Future')
-    ax.legend()
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = bcrypt.generate_password_hash(request.form['password']).decode('utf-8')
+        new_user = User(username=username, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('login'))
+    return render_template('register.html')
 
-    
-    img = io.BytesIO()
-    plt.savefig(img, format='png')
-    img.seek(0)
-    plot_url = base64.b64encode(img.getvalue()).decode('utf8')
-    plt.close()
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        user = User.query.filter_by(username=request.form['username']).first()
+        if user and bcrypt.check_password_hash(user.password, request.form['password']):
+            login_user(user)
+            return redirect(url_for('index'))
+    return render_template('login.html')
 
-    return plot_url
-
-@app.route('/')
-def home():
-    return render_template('index.html')
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
 
 @app.route('/simulate', methods=['POST'])
+@login_required
 def simulate():
-    stock = request.form['stock']
+    ticker = request.form['ticker']
     years = int(request.form['years'])
-    
-    result = monte_carlo_simulation(stock, years)
-    
-    if result:
-        return jsonify({'status': 'success', 'plot_url': result})
-    else:
-        return jsonify({'status': 'error', 'message': f'No data for stock: {stock}'})
+
+    # Dummy simulation data
+    data = np.random.normal(10, 2, 100)
+
+    # Generate plots
+    plt.figure()
+    plt.plot(data)
+    line_chart = save_plot_to_base64()
+
+    plt.figure()
+    plt.hist(data, bins=10)
+    histogram = save_plot_to_base64()
+
+    plt.figure()
+    plt.pie([random.random() for _ in range(5)], labels=["A", "B", "C", "D", "E"], autopct='%1.1f%%')
+    pie_chart = save_plot_to_base64()
+
+    # Save to database
+    simulation = Simulation(
+        user_id=current_user.id,
+        ticker=ticker,
+        years=years,
+        result_data="Example Data"
+    )
+    db.session.add(simulation)
+    db.session.commit()
+
+    return jsonify({'status': 'success', 'line_chart': line_chart, 'histogram': histogram, 'pie_chart': pie_chart})
+
+def save_plot_to_base64():
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    buf.seek(0)
+    image_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+    buf.close()
+    return image_base64
+
+@app.route('/history')
+@login_required
+def history():
+    simulations = Simulation.query.filter_by(user_id=current_user.id).all()
+    return render_template('history.html', simulations=simulations)
 
 if __name__ == '__main__':
+    db.create_all()
     app.run(debug=True)

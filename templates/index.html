@@ -3,24 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Portfolio Monte Carlo Simulation</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        form { margin-bottom: 20px; }
-        input { padding: 10px; font-size: 1em; }
-        button { padding: 10px 20px; font-size: 1em; }
-        #result { margin-top: 20px; }
-    </style>
+    <title>Stock and Crypto Portfolio Simulator</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Monte Carlo Simulation for Stock Projections</h1>
+    <h1>Monte Carlo Simulation for Stocks and Cryptos</h1>
+
+    <nav>
+        <a href="/register">Register</a> |
+        <a href="/login">Login</a> |
+        <a href="/history">History</a> |
+        <a href="/logout">Logout</a>
+    </nav>
+
     <form id="simulation-form">
-        <label for="stock">Stock Ticker:</label>
-        <input type="text" id="stock" name="stock" required>
-        <br><br>
+        <label for="ticker">Ticker (Stock/Crypto):</label>
+        <input type="text" id="ticker" name="ticker" required>
+
         <label for="years">Years to Project:</label>
         <input type="number" id="years" name="years" min="1" required>
-        <br><br>
+
         <button type="submit">Run Simulation</button>
     </form>
 
@@ -30,7 +32,7 @@
         document.getElementById('simulation-form').addEventListener('submit', function (e) {
             e.preventDefault();
             const formData = new FormData(e.target);
-            
+
             fetch('/simulate', {
                 method: 'POST',
                 body: formData
@@ -38,9 +40,14 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    document.getElementById('result').innerHTML = '<img src="data:image/png;base64,' + data.plot_url + '" />';
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.innerHTML = `
+                        <img src="data:image/png;base64,${data.line_chart}" alt="Line Chart">
+                        <img src="data:image/png;base64,${data.pie_chart}" alt="Pie Chart">
+                        <img src="data:image/png;base64,${data.histogram}" alt="Histogram">
+                    `;
                 } else {
-                    document.getElementById('result').innerHTML = '<p>' + data.message + '</p>';
+                    document.getElementById('result').innerHTML = `<p>${data.message}</p>`;
                 }
             })
             .catch(error => console.error('Error:', error));
