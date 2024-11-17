@@ -1,4 +1,6 @@
-web: gunicorn app:stockportfoliosimulator
+web gunicorn main:app
+
+
 
 
 
