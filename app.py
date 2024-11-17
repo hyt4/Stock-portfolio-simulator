@@ -11,11 +11,11 @@ app = Flask(__name__)
 
 # Function to get stock data and simulate Monte Carlo projections
 def monte_carlo_simulation(stock, years, n_mc=10000):
-    # Fetch stock data
+    
     ticker = yf.Ticker(stock)
     actual_hist = ticker.history(start="2020-12-29", end="2024-09-20", auto_adjust=False)
     
-    # Check if data is empty
+    
     if actual_hist.empty:
         return None
     
@@ -32,7 +32,7 @@ def monte_carlo_simulation(stock, years, n_mc=10000):
     n_t = len(actual_hist)
     dt = 2. / (n_t + future_days - 1)
     
-    # Extend the index with future dates
+    
     last_date = actual_hist.index[-1]
     future_dates = pd.date_range(last_date, periods=future_days + 1, freq=BDay())[1:]
     all_dates = actual_hist.index.append(future_dates)
@@ -62,7 +62,7 @@ def monte_carlo_simulation(stock, years, n_mc=10000):
     ax.set_title(f'Monte Carlo Simulation for {stock}: {years} Years into the Future')
     ax.legend()
 
-    # Save plot to a string buffer
+    
     img = io.BytesIO()
     plt.savefig(img, format='png')
     img.seek(0)
